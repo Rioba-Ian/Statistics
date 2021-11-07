@@ -1,0 +1,325 @@
+---
+title: "R Notebook"
+author: "<em>Rioba Ian</em>"
+output:
+  html_document:
+    df_print: paged
+---
+<h2>student id: 00482309 </h2>
+
+<h1>Assignment 1</h1>
+
+
+
+# Question 1
+The first question is about importing the Thanksgiving dataset. The first 10 rows of the dataset can be visualized as follows:-
+
+```{r}
+data = read.csv("/home/rioba/Documents/Mogrey/work6/thanksgiving_meals.csv")
+
+library(tidyverse)
+library(skimr)
+
+knitr::kable(head(data), 'pipe')
+```
+# Question 2
+We shall use the <code>skim()</code> to display the summary in a table.
+
+```{r}
+knitr::kable(skim(data))
+```
+
+# Question 3 
+In this question we are supposed to think of a the variables in the dataset that maybe useful to predict the family income and if they are in the correct format. 
+<br>
+The variables that could be useful in predicting the family income are the gender, age, community type, working in retail, attended a friend giving, meeting up with home-town friends, cut off age at thanksgiving for the kids and celebrating. The community type variable could affect income as it gives the kind of neighborhood that the parents live in. If one has ever attended a friends giving and meeting up with hometown friends could be indicators of family income because families will tend to have a higher income from being helped with their friends and community. 
+
+<ul>
+<li>Do you celebrate Thanksgiving?</li>
+<li>What is typically the main dish at your Thanksgiving dinner?</li>
+<li>How is the main dish typically cooked?</li>
+
+<li>What kind of stuffing/dressing do you typically have?</li>
+
+<li>What type of cranberry sauce do you typically have?</li>
+
+<li>Do you typically have gravy?</li>
+<li>Which of these side dishes are typically served at your Thanksgiving dinner?</li> 
+<li>Which type of pie is typically served at your Thanksgiving dinner?</li>
+<li>Which of these desserts do you typically have at Thanksgiving dinner?</li>
+</ul>
+```{r}
+knitr::kable(data %>%
+  count(us_region))
+knitr::kable(data %>%
+  count(main_dish, main_prep, sort = TRUE))
+```
+```{r}
+knitr::kable(data %>%
+  mutate(family_income = fct_reorder(family_income, parse_number(family_income))) %>%
+  count(family_income))
+```
+
+
+# Question 3
+We have used the fct_reorder and the parse function to compute the family income. We can now group by the family income.
+
+```{r}
+family_income_df = read.csv("/home/rioba/Documents/Mogrey/work6/thanksgiving_meals.csv")%>%
+  mutate(family_income = fct_reorder(family_income,parse_number(family_income)))
+```
+```{r}
+knitr::kable(family_income_df%>%group_by(family_income)%>%
+summarize(homemade = mean(cranberry == "Homemade"),
+          size = n()))
+```
+
+
+#Question 4
+Those who celebrate and those who don't celebrate
+```{r}
+# Those who celebrate are 980.
+knitr::kable(data %>%
+  count(celebrate))
+```
+
+
+#Question 5
+```{r}
+library(curl)
+dim(data)
+
+#colnames(data)
+
+#susetting data 
+ggplot(data, mapping = aes(data$us_region))+
+    geom_bar(aes(fill=data$age))+
+    xlab('Living Region')+labs(fill='gender')+geom_text(stat='count',aes(label = ..count..,y=..count..),vjust=-0.2)+
+    ggtitle('Poll data')
+```
+
+more visualizations
+```{r}
+ggplot(data, mapping = aes(data$us_region))+
+    geom_bar(aes(fill=data$celebrate))+
+    xlab('US Region')+labs(fill='age_range')+geom_text(stat='count',aes(label = ..count..,y=..count..),vjust=-0.2)+
+    theme(axis.text.x = element_text(angle = 90))+
+    ggtitle('Poll data')
+```
+
+
+## Question 7
+Those who use cranberry sauce and grovy 
+```{r}
+knitr::kable(family_income_df%>%group_by(family_income)%>%
+summarize(gravy_sauce = mean(gravy),
+          size = n()))
+```
+
+
+## Analysing the dessert and food.
+```{r}
+food_gathered = family_income_df%>%
+  select(id, starts_with("side"),
+         starts_with("pie"), 
+         starts_with("dessert")) %>%
+  select(-side15, -pie13,-dessert12)%>%
+    gather(type, value, -id) %>%
+    filter(!is.na(value)) %>%
+    mutate(type= str_remove(type, "\\d+"))
+
+food_gathered%>%
+  count(type, value, sort = TRUE)
+```
+
+
+## Question 10
+We could ask ourselves a question of what are people actually eating. 
+```{r}
+
+n_respondents = n_distinct(food_gathered$id)
+
+food_gathered%>%
+  count(type, value, sort = TRUE)%>%
+  mutate(value = fct_reorder(value, n))%>%
+  ggplot(aes(value, n/n_respondents, fill=type))+
+  geom_col()+
+  coord_flip()+
+  scale_y_continuous(labels = scales::percent_format()) + 
+  labs(x="",
+       y="# of respondents")
+```
+
+what are the most common pies, sides and desserts?
+```{r}
+food_gathered%>%
+  count(type, value, sort = TRUE)%>%
+  mutate(value = fct_reorder(value, n))%>%
+  ggplot(aes(value, n/n_respondents, fill=type))+
+  geom_col(show.legend = FALSE)+
+  coord_flip()+
+  scale_y_continuous(labels = scales::percent_format()) +
+  facet_wrap(~ type, scales = "free", ncol=1)
+  labs(x="",
+       y="# of respondents")
+```
+
+
+How do the servings differ by the income?
+```{r}
+food_gathered%>%
+  inner_join(family_income_df, by="id")%>%
+  mutate(age_number = parse_number(age))%>%
+  group_by(value) %>%
+  summarize(average_age = mean(age_number, na.rm = TRUE), total = n()) %>%
+  arrange(desc(average_age))
+```
+
+The count of the regions and their respondents
+```{r}
+food_by_region = food_gathered%>%
+  inner_join(family_income_df, by="id")%>%
+  group_by(us_region)%>%
+  mutate(respondents = n_distinct(id))%>%
+  count(us_region, respondents, type,value) %>%
+  ungroup()%>%
+  mutate(percent = n/respondents)
+
+food_by_region%>%
+  filter(value == "Apple")
+```
+
+```{r}
+food_by_region%>%
+  filter(value == "Apple") %>%
+  arrange(desc(percent))
+
+food_by_region%>%
+  filter(value == "Pumpkin") %>%
+  arrange(desc(percent))
+
+food_by_region%>%
+  filter(value == "Cornbread") %>%
+  arrange(desc(percent))
+```
+
+Did you pray before and after thanksgiving meal?
+```{r}
+
+food_gathered %>%
+  inner_join(family_income_df, by="id")%>%
+  filter(!is.na(prayer))%>%
+  group_by(type, value) %>%
+  summarize(prayer = sum(prayer == "Yes"),
+            total = n(),
+            percent = prayer / total)%>%
+  arrange(desc(percent))
+```
+
+Question 11-13
+
+what sides are eaten together?
+```{r}
+library(widyr)
+
+food_cors = food_gathered %>% 
+  pairwise_count(value, id, sort=TRUE) 
+
+library(ggraph)
+library(igraph)
+
+set.seed(234)
+
+food_cors %>%
+  head(75) %>%
+  graph_from_data_frame()%>%
+  ggraph()+
+  geom_edge_link()+
+  geom_node_point()+
+  geom_node_text(aes(label = name))
+```
+
+## Running Regression lm()
+
+```{r}
+data_clean = select(data, us_region, gender, age, community_type, work_retail, friendsgiving, hometown_friends, celebrate, family_income)
+
+
+data_clean$family_income  = parse_number(data_clean$family_income)
+data_clean$age = parse_number(data_clean$age)
+
+sum(is.na(data_clean))
+
+df = na.omit(data_clean)
+
+dim(df)
+  
+
+```
+
+
+
+lm() for the family income based on the us_region, gender, age, community_type, work_retail, friendsgiving, hometown_friends, celebrate, family_income. 
+
+```{r}
+
+lapply(df[c("us_region", "gender"          
+,"age","community_type","work_retail",      "friendsgiving","hometown_friends","celebrate"  , "family_income")], unique)
+model_regression = lm(family_income ~ us_region+ gender+age+community_type+ work_retail+ friendsgiving+ hometown_friends , data = df )
+
+summary(model_regression)
+```
+
+
+Linear regression while removing where they work in retail.  
+```{r}
+model_regression_retail = lm(family_income ~ us_region+ gender+age+community_type+ friendsgiving+ hometown_friends , data = df )
+
+summary(model_regression_retail)
+```
+
+
+
+Logistic regression for family income 
+
+```{r}
+mylogit = glm(family_income ~ us_region+ gender+age+community_type+ work_retail+ friendsgiving+ hometown_friends , data = df)
+
+summary(mylogit)
+```
+
+Logistic regression for family income without retail
+```{r}
+mylogit_less_retail = glm(family_income ~ us_region+ gender+age+community_type+ friendsgiving+ hometown_friends , data = df)
+
+summary(mylogit_less_retail)
+```
+
+
+Ridge Regression 
+
+```{r}
+library(glmnet)
+
+x = df[c("us_region", "gender"          
+,"age","community_type","work_retail",      "friendsgiving","hometown_friends","celebrate")]
+
+y = df[, "family_income"]
+
+lambda_seq <- 10^seq(2, -2, by = -.1)
+
+fit <- glmnet(x, y, alpha = 0, lambda  = lambda_seq)
+# Checking the model
+summary(fit)
+```
+Ridge regression while lamda is set. 
+```{r}
+
+ridge_modified <- glmnet(x, y, alpha = 0, lambda = 79.43)
+
+coef(ridge_modified)
+
+```
+
+
+
